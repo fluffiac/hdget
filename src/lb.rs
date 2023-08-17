@@ -6,6 +6,10 @@ use scraper::{ElementRef, Node};
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
+/// entry object
+/// 
+/// you obtain instances of this object through a Leaderboard,
+/// specifically, it's `.from_site` or `.from_cache` methods.
 #[derive(Debug)]
 pub struct Entry {
     rank: u16,
@@ -16,6 +20,7 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// reads an Entry out of some async reader
     async fn read(r: &mut (impl io::AsyncRead + Unpin)) -> io::Result<Self> {
         let rank = r.read_u16_le().await?;
         let name = {
@@ -37,6 +42,7 @@ impl Entry {
         })
     }
 
+    /// writes an Entry into some async reader
     async fn write(&self, w: &mut (impl io::AsyncWrite + Unpin)) -> io::Result<()> {
         w.write_u16_le(self.rank).await?;
         let str = self.name.as_bytes();
@@ -49,32 +55,45 @@ impl Entry {
         Ok(())
     }
 
+    /// checks two Entries to see if they have the
+    /// same user_id
     pub fn same_user(&self, other: &Self) -> bool {
         self.user_id == other.user_id
     }
 }
 
 #[derive(Debug)]
+/// represets a whole leaderboard
+/// 
+/// contains methods to read from/write to a cache
+/// or read out from the website.
 pub struct Leaderboard {
     timestamp: Duration,
     entries: Vec<Entry>,
 }
 
 impl Leaderboard {
+    /// Scrape the leaderboard off the site
     pub async fn from_site() -> reqwest::Result<Option<Self>> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
+        // GET the leaderboard
         let html = reqwest::get("https://hyprd.mn/leaderboards")
             .await?
             .text()
             .await?;
 
+        // use a dom lib to help scrape the doc
         let doc = scraper::Html::parse_document(&html);
+        // create a new selector
         let sel = scraper::Selector::parse(".leaderboard>tbody>tr").unwrap();
 
+        // helper function to parse html output
         fn parse_row(row: ElementRef) -> Option<Entry> {
+            // u gotta do what u gotta do
+
             let mut cols = row.children();
 
             cols.next();
@@ -107,14 +126,21 @@ impl Leaderboard {
         }
 
         let Some(entries) = doc
+            // use selector
             .select(&sel)
+            // every 2nd row (feature of the site :p)
             .step_by(2)
+            // map using the helper function
             .map(parse_row)
+            // collect into Option<Vec<Entries>>
+            // if Option = None, return Ok(None)
+            // else entries = Vec<Entries>
             .collect::<Option<Vec<_>>>() else { return Ok(None) };
 
         Ok(Some(Self { timestamp, entries }))
     }
 
+    /// get a Leaderboard from cache
     pub async fn from_cache() -> io::Result<Self> {
         let mut cache = File::open("cache").await?;
         let mut buf = io::BufReader::new(&mut cache);
@@ -130,6 +156,7 @@ impl Leaderboard {
         Ok(Self { timestamp, entries })
     }
 
+    /// write the Leaderboard to cache
     pub async fn cache(&self) -> io::Result<()> {
         let mut cache = File::create("cache").await?;
         let mut buf = io::BufWriter::new(&mut cache);
