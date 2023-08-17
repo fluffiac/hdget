@@ -172,11 +172,16 @@ impl Leaderboard {
         Ok(())
     }
 
+    /// Get all Pb objects from two different leaderboards
     pub fn pbs<'a>(&'a self, new: &'a Self) -> Vec<Pb<'a>> {
         Pb::diff(&self.entries, &new.entries)
     }
 }
 
+/// an object representing a Personal Best
+/// 
+/// it is derived from two leaderboards, so it
+/// contains data from those fellas
 #[derive(Debug)]
 pub struct Pb<'a> {
     old: Option<&'a Entry>,
@@ -188,6 +193,8 @@ impl<'a> Pb<'a> {
         Self { old, new }
     }
 
+    /// check two vecs of entries to see if there were any
+    /// peebs
     pub fn diff(old: &'a Vec<Entry>, new: &'a Vec<Entry>) -> Vec<Self> {
         let mut pbs = Vec::new();
         let mut old: HashMap<_, _> = old.iter().map(|e| (e.user_id, e)).collect();
@@ -209,6 +216,10 @@ impl<'a> Pb<'a> {
     }
 }
 
+/// Implements Display for Pb
+/// 
+/// Which means that it knows how to be turned
+/// into a pretty string
 impl std::fmt::Display for Pb<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(old) = self.old {
@@ -249,6 +260,7 @@ impl std::fmt::Display for Pb<'_> {
     }
 }
 
+/// tests
 #[cfg(test)]
 mod test {
     use super::*;
